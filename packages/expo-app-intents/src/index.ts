@@ -190,7 +190,11 @@ export async function clearPendingInvocationsAsync(): Promise<void> {
 
 /**
  * Replaces the entity catalog of the given kind and asks the system to re-train
- * parameterized shortcut phrases against the new values.
+ * parameterized shortcut phrases against the new values. Entities registered natively with
+ * `registerIndexed` also have their Spotlight index rebuilt from the new catalog.
+ *
+ * Publishing a catalog that matches the stored one does nothing, so it is safe to call this on
+ * every app start.
  *
  * The native store is UserDefaults-backed, so it's recommended to keep catalogs compact. For large
  * datasets such as thousands of contacts, songs, or other items, store the full
@@ -210,6 +214,30 @@ export async function setEntityCatalogAsync(
     return;
   }
   return ExpoAppIntents.setEntityCatalogAsync(kind, entities);
+}
+
+/**
+ * Rebuilds the Spotlight index from the stored entity catalog, whether or not the catalog
+ * changed. `setEntityCatalogAsync` already keeps the index in step, so this is only needed to
+ * recover from an index that no longer matches the catalog: one the system evicted, or one left
+ * stale by an app update that changed how entities describe themselves.
+ *
+ * Pass a `kind` to rebuild one catalog, or omit it to rebuild every kind registered natively with
+ * `registerIndexed`. Kinds with no indexed registration are ignored.
+ *
+ * Rejects when a catalog cannot be read or the index cannot be written, because this is the retry
+ * path and a caller that asked for a rebuild has no other way to learn it did not happen. Every
+ * kind is attempted before the first failure is reported, so one unreadable catalog does not skip
+ * the rest. A kind whose rebuild failed is retried by the next `setEntityCatalogAsync`, even when
+ * the catalog it publishes is unchanged.
+ *
+ * @platform ios
+ */
+export async function reindexEntitiesAsync(kind?: string): Promise<void> {
+  if (!ExpoAppIntents) {
+    return;
+  }
+  return ExpoAppIntents.reindexEntitiesAsync(kind ?? null);
 }
 
 /**
@@ -248,6 +276,8 @@ export async function refreshShortcutsAsync(): Promise<void> {
  *
  * The `entity` value must be registered from app-target Swift with
  * `AppEntityIdentifierRegistry.shared.register(_:as:)`.
+ *
+ * @platform ios
  */
 export function appEntityIdentifier(entity: string, id: string): AppEntityIdentifierModifier {
   return {
