@@ -1,16 +1,19 @@
 import { createContext } from 'react';
 
 import { LoaderClient } from './LoaderClient';
+import { createLoaderRouteRegistry, type LoaderRouteRegistry } from './LoaderRouteRegistry';
 import { LoaderSuspenseStore } from './LoaderSuspenseStore';
 import { bumpDevLoaderRevision } from './utils';
 
 export interface LoaderContextValue {
   client: LoaderClient;
   store: LoaderSuspenseStore;
+  registry: LoaderRouteRegistry;
 }
 
 export function createLoaderContextValue(client: LoaderClient): LoaderContextValue {
-  return { client, store: new LoaderSuspenseStore() };
+  const store = new LoaderSuspenseStore();
+  return { client, store, registry: createLoaderRouteRegistry() };
 }
 
 export const defaultLoaderContextValue = createLoaderContextValue(new LoaderClient());

@@ -7,9 +7,10 @@ import { useContextKey } from '../Route';
 import { getRouteInfoFromState } from '../global-state/getRouteInfoFromState';
 import { LoaderContext } from '../loaders/LoaderContext';
 import { ServerDataLoaderContext } from '../loaders/ServerDataLoaderContext';
+import { abandonLoaderPath } from '../loaders/abandonLoaderPath';
 import { readLoaderData } from '../loaders/readLoaderData';
 import { fetchLoader } from '../loaders/utils';
-import { useStateForPath } from '../react-navigation/native';
+import { useRoute, useStateForPath } from '../react-navigation/native';
 import { getSingularId } from '../useScreens';
 
 type LoaderFunctionResult<T extends LoaderFunction<any>> =
@@ -37,7 +38,7 @@ export function useLoaderData<T extends LoaderFunction<any> = any>(): LoaderFunc
   const ctx = use(LoaderContext);
   const serverDataLoaderContext = use(ServerDataLoaderContext);
 
-  const { client, store } = ctx;
+  const { client, registry, store } = ctx;
 
   // Subscribe before any early returns so a later `loader-invalidate` re-renders this hook even
   // when the initial render was satisfied by `ServerDataLoaderContext` or `__EXPO_ROUTER_LOADER_DATA__`.
@@ -46,6 +47,7 @@ export function useLoaderData<T extends LoaderFunction<any> = any>(): LoaderFunc
   useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
 
   const stateForPath = useStateForPath();
+  const route = useRoute();
   const contextKey = useContextKey();
 
   const resolvedPath = useMemo(() => {
@@ -85,6 +87,10 @@ export function useLoaderData<T extends LoaderFunction<any> = any>(): LoaderFunc
     delete hydrationData[resolvedPath];
   }
 
+  const abandonedPath = registry.claim(route.key, resolvedPath);
+  if (abandonedPath !== undefined) {
+    abandonLoaderPath(ctx, abandonedPath);
+  }
   const result = readLoaderData<LoaderFunctionResult<T>>(ctx, resolvedPath, fetchLoader);
   return result instanceof Promise ? use(result) : result;
 }
