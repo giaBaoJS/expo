@@ -60,12 +60,12 @@ export function useLoaderData<T extends LoaderFunction<any> = any>(): LoaderFunc
   useEffect(() => {
     // Hydration-seeded routes never reach a read miss, so invalidation can't refetch them
     // without a registered fetcher.
-    client.registerFetcher(resolvedPath, fetchLoader);
     const unsubscribe = client.subscribeLoader(resolvedPath, (result, isCurrentSource) => {
       if (isCurrentSource) {
         store.set(resolvedPath, result);
       }
     });
+    client.registerFetcher(resolvedPath, fetchLoader);
     return () => {
       store.dispose(resolvedPath);
       unsubscribe(() => store.teardown(resolvedPath));

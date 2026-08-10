@@ -3,6 +3,7 @@ import { createLoaderContextValue, type LoaderContextValue } from '../LoaderCont
 import { readLoaderData } from '../readLoaderData';
 
 const tick = () => Promise.resolve();
+const getSignal = (requestInit: RequestInit) => requestInit.signal as AbortSignal;
 const createLoaderContext = () => createLoaderContextValue(new LoaderClient());
 const read = <T>(ctx: LoaderContextValue, path: string, fetcher: (path: string) => Promise<T>) =>
   readLoaderData(ctx, path, fetcher);
@@ -259,6 +260,7 @@ describe(readLoaderData, () => {
         ctx.store.set('/p', result);
       }
     });
+    ctx.client.registerFetcher('/p', fetcher);
 
     revalidate(ctx);
     expect(read(ctx, '/p', fetcher)).toBe('v1');
@@ -266,6 +268,32 @@ describe(readLoaderData, () => {
     await tick();
     expect(read(ctx, '/p', fetcher)).toBe('v2');
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a pending read attached to the replacement request during invalidation', async () => {
+    const ctx = createLoaderContext();
+    const signals: AbortSignal[] = [];
+    const fetcher = jest.fn((_path: string, requestInit: RequestInit) => {
+      const signal = getSignal(requestInit);
+      signals.push(signal);
+      if (signals.length === 1) {
+        return new Promise<string>((_, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason));
+        });
+      }
+      return Promise.resolve('post-edit');
+    });
+
+    const pending = readLoaderData(ctx, '/p', fetcher) as Promise<string>;
+    expect(ctx.store.get('/p')).toBe(pending);
+
+    revalidate(ctx);
+
+    expect(signals).toHaveLength(2);
+    expect(signals[0]!.aborted).toBe(true);
+    expect(ctx.store.get('/p')).toBe(pending);
+    await expect(pending).resolves.toBe('post-edit');
+    expect(ctx.store.get('/p')).toEqual({ data: 'post-edit' });
   });
 
   it('keeps the entry when a sibling subscriber remains', async () => {
@@ -282,6 +310,7 @@ describe(readLoaderData, () => {
         ctx.store.set('/p', result);
       }
     });
+    ctx.client.registerFetcher('/p', fetcher);
 
     revalidate(ctx);
     ctx.store.dispose('/p');

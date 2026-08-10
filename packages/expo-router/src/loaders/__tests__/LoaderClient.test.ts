@@ -1,6 +1,7 @@
 import { LoaderClient } from '../LoaderClient';
 
 const tick = () => Promise.resolve();
+const getSignal = (requestInit: RequestInit) => requestInit.signal as AbortSignal;
 
 describe(LoaderClient, () => {
   describe('notify', () => {
@@ -40,6 +41,26 @@ describe(LoaderClient, () => {
         ['second', { data: 'v1' }, true],
         'notify',
       ]);
+    });
+
+    it('passes a distinct signal to each successive execution', async () => {
+      const client = new LoaderClient();
+      const signals: AbortSignal[] = [];
+      const fetcher = jest.fn(async (_path: string, requestInit: RequestInit) => {
+        const signal = getSignal(requestInit);
+        signals.push(signal);
+        return signals.length;
+      });
+      client.subscribeLoader('/p');
+
+      client.execute('/p', fetcher);
+      await tick();
+      client.execute('/p');
+      await tick();
+
+      expect(signals).toHaveLength(2);
+      expect(signals[0]).not.toBe(signals[1]);
+      expect(signals.every((signal) => !signal.aborted)).toBe(true);
     });
 
     it('does not execute a fetcher for a path without a source', () => {
@@ -90,6 +111,115 @@ describe(LoaderClient, () => {
   });
 
   describe('teardown', () => {
+    it('releases the registered fetcher with the source', async () => {
+      const client = new LoaderClient();
+      const fetcher = jest.fn(async () => 'v1');
+      const unsubscribe = client.subscribeLoader('/p');
+      client.registerFetcher('/p', fetcher);
+
+      unsubscribe();
+      await tick();
+      client.subscribeLoader('/p');
+      client.execute('/p');
+
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    it('aborts an in-flight execution after confirmed last-subscriber teardown', async () => {
+      const client = new LoaderClient();
+      let signal!: AbortSignal;
+      const unsubscribe = client.subscribeLoader('/p');
+      client.execute('/p', (_path, requestInit) => {
+        const executionSignal = getSignal(requestInit);
+        signal = executionSignal;
+        return new Promise((_, reject) => {
+          executionSignal.addEventListener('abort', () => reject(executionSignal.reason));
+        });
+      });
+
+      unsubscribe();
+      expect(signal.aborted).toBe(false);
+      await tick();
+
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('does not abort while a sibling subscriber remains', async () => {
+      const client = new LoaderClient();
+      let signal!: AbortSignal;
+      const first = client.subscribeLoader('/p');
+      client.subscribeLoader('/p');
+      client.execute('/p', (_path, requestInit) => {
+        signal = getSignal(requestInit);
+        return new Promise(() => {});
+      });
+
+      first();
+      await tick();
+
+      expect(signal.aborted).toBe(false);
+    });
+
+    it('does not abort when a subscriber remounts within the teardown microtask', async () => {
+      const client = new LoaderClient();
+      let signal!: AbortSignal;
+      const first = client.subscribeLoader('/p');
+      client.execute('/p', (_path, requestInit) => {
+        signal = getSignal(requestInit);
+        return new Promise(() => {});
+      });
+
+      first();
+      client.subscribeLoader('/p');
+      await tick();
+
+      expect(signal.aborted).toBe(false);
+    });
+
+    it('does not let a cancelled teardown attempt abort a replacement source', async () => {
+      const client = new LoaderClient();
+      const signals: AbortSignal[] = [];
+      const first = client.subscribeLoader('/p');
+      client.execute('/p', (_path, requestInit) => {
+        signals.push(getSignal(requestInit));
+        return new Promise(() => {});
+      });
+      first();
+
+      client.clear();
+      const second = client.subscribeLoader('/p');
+      client.execute('/p', (_path, requestInit) => {
+        signals.push(getSignal(requestInit));
+        return new Promise(() => {});
+      });
+      await tick();
+
+      expect(signals).toHaveLength(2);
+      expect(signals[0]!.aborted).toBe(false);
+      expect(signals[1]!.aborted).toBe(false);
+
+      second();
+      await tick();
+      expect(signals[0]!.aborted).toBe(false);
+      expect(signals[1]!.aborted).toBe(true);
+    });
+
+    it('does not abort a settled request when its source later tears down', async () => {
+      const client = new LoaderClient();
+      let signal!: AbortSignal;
+      const unsubscribe = client.subscribeLoader('/p');
+      client.execute('/p', async (_path, requestInit) => {
+        signal = getSignal(requestInit);
+        return 'settled';
+      });
+      await tick();
+
+      unsubscribe();
+      await tick();
+
+      expect(signal.aborted).toBe(false);
+    });
+
     it('calls onTearDown after the last unsubscribe', async () => {
       const client = new LoaderClient();
       const onTearDown = jest.fn();
@@ -171,10 +301,43 @@ describe(LoaderClient, () => {
   });
 
   describe('revalidate', () => {
+    it('aborts and replaces an in-flight request, ignoring its later result', async () => {
+      const client = new LoaderClient();
+      const signals: AbortSignal[] = [];
+      const resolvers: ((value: string) => void)[] = [];
+      const subscriber = jest.fn();
+      const fetcher = jest.fn(
+        (_path: string, requestInit: RequestInit) =>
+          new Promise<string>((resolve) => {
+            signals.push(getSignal(requestInit));
+            resolvers.push(resolve);
+          })
+      );
+
+      client.subscribeLoader('/p', subscriber);
+      client.execute('/p', fetcher);
+      const livePaths = client.revalidate();
+
+      expect(livePaths).toEqual(new Set(['/p']));
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(signals).toHaveLength(2);
+      expect(signals[0]!.aborted).toBe(true);
+      expect(signals[1]!.aborted).toBe(false);
+
+      resolvers[0]!('pre-edit');
+      await tick();
+      expect(subscriber).not.toHaveBeenCalled();
+
+      resolvers[1]!('post-edit');
+      await tick();
+      expect(subscriber).toHaveBeenCalledTimes(1);
+      expect(subscriber).toHaveBeenCalledWith({ data: 'post-edit' }, true);
+    });
+
     it('re-executes paths with live subscribers and returns their paths', async () => {
       const client = new LoaderClient();
       const fetcher = jest
-        .fn<Promise<string>, [string]>()
+        .fn<Promise<string>, [string, RequestInit]>()
         .mockResolvedValueOnce('v1')
         .mockResolvedValueOnce('v2');
       const results: unknown[] = [];

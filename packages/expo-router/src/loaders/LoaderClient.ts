@@ -1,11 +1,12 @@
-type LoaderFetcher = (path: string) => Promise<unknown>;
+type LoaderFetcher = (path: string, requestInit: RequestInit) => Promise<unknown>;
 export type LoaderResult = { data: unknown } | { error: unknown };
 type LoaderSubscriber = (result: LoaderResult, isCurrentSource: boolean) => void;
 export type LoaderUnsubscribe = (onSourceTeardown?: () => void) => void;
 
 interface LoaderSource {
   subscribers: Set<LoaderSubscriber>;
-  isFetching: boolean;
+  fetcher: LoaderFetcher | null;
+  controller: AbortController | null;
   onTeardown?: () => void;
 }
 
@@ -17,7 +18,6 @@ interface LoaderSource {
  */
 export class LoaderClient {
   private active = new Map<string, LoaderSource>();
-  private fetchers = new Map<string, LoaderFetcher>();
   private version = 0;
   private listeners = new Set<() => void>();
 
@@ -44,7 +44,7 @@ export class LoaderClient {
   subscribeLoader(path: string, callback: LoaderSubscriber = () => {}): LoaderUnsubscribe {
     let source = this.active.get(path);
     if (!source) {
-      source = { subscribers: new Set(), isFetching: false };
+      source = { subscribers: new Set(), fetcher: null, controller: null };
       this.active.set(path, source);
     }
     source.onTeardown = undefined;
@@ -64,24 +64,45 @@ export class LoaderClient {
   }
 
   registerFetcher(path: string, fetcher: LoaderFetcher) {
-    this.fetchers.set(path, fetcher);
+    const source = this.active.get(path);
+    if (source) {
+      source.fetcher = fetcher;
+    }
   }
 
-  execute(path: string, fetcher?: LoaderFetcher) {
-    if (fetcher) {
-      this.fetchers.set(path, fetcher);
-    }
+  hasSubscribers(path: string): boolean {
+    return (this.active.get(path)?.subscribers.size ?? 0) > 0;
+  }
+
+  abort(path: string) {
     const source = this.active.get(path);
-    const fetcherFn = this.fetchers.get(path);
-    if (!source || !fetcherFn || source.isFetching) {
+    if (!source) {
       return;
     }
 
-    source.isFetching = true;
-    fetcherFn(path).then(
-      (data) => this.settle(path, source, { data }),
+    this.active.delete(path);
+    this.abortSourceRequest(source);
+  }
+
+  execute(path: string, fetcher?: LoaderFetcher) {
+    const source = this.active.get(path);
+    if (!source) {
+      return;
+    }
+    if (fetcher) {
+      source.fetcher = fetcher;
+    }
+    const fetcherFn = source.fetcher;
+    if (!fetcherFn || source.controller) {
+      return;
+    }
+
+    const controller = new AbortController();
+    source.controller = controller;
+    fetcherFn(path, { signal: controller.signal }).then(
+      (data) => this.settle(path, source, controller.signal.aborted, { data }),
       (error) =>
-        this.settle(path, source, {
+        this.settle(path, source, controller.signal.aborted, {
           error: new Error(`Failed to load loader data for route: ${path}`, {
             cause: error,
           }),
@@ -94,6 +115,7 @@ export class LoaderClient {
     for (const [path, source] of this.active) {
       if (source.subscribers.size > 0) {
         livePaths.add(path);
+        this.abortSourceRequest(source);
         this.execute(path);
       }
     }
@@ -102,7 +124,6 @@ export class LoaderClient {
 
   clear() {
     this.active.clear();
-    this.fetchers.clear();
   }
 
   private scheduleTeardown(path: string, source: LoaderSource, onSourceTeardown?: () => void) {
@@ -114,6 +135,7 @@ export class LoaderClient {
       ) {
         this.active.delete(path);
         source.onTeardown = undefined;
+        this.abortSourceRequest(source);
         onSourceTeardown?.();
       }
     };
@@ -121,9 +143,23 @@ export class LoaderClient {
     queueMicrotask(onTeardown);
   }
 
-  private settle(path: string, source: LoaderSource, result: LoaderResult) {
-    source.isFetching = false;
+  private abortSourceRequest(source: LoaderSource) {
+    const controller = source.controller;
+    source.controller = null;
+    controller?.abort();
+  }
+
+  private settle(
+    path: string,
+    source: LoaderSource,
+    wasRequestAborted: boolean,
+    result: LoaderResult
+  ) {
     const isCurrentSource = this.active.get(path) === source;
+    if (isCurrentSource && wasRequestAborted) {
+      return;
+    }
+    source.controller = null;
     for (const subscriber of source.subscribers) {
       subscriber(result, isCurrentSource);
     }
