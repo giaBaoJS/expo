@@ -47,7 +47,11 @@ class AuthenticationService: ObservableObject {
 
   func checkAuthenticationStatus() {
     if Self.isPartnerSessionExpired() {
-      signOut()
+      // The bridge reads this expiry to explain the failure, then clears it.
+      Self.deleteNativeSession()
+      user = nil
+      selectedAccountId = nil
+      isAuthenticated = false
       return
     }
 
@@ -185,8 +189,7 @@ class AuthenticationService: ObservableObject {
     NotificationCenter.default.post(name: .expoSessionDidChange, object: nil)
   }
 
-  /// The stored expiry is the only local signal that a partner session died. Asking the server would
-  /// cost a round trip on every project open, and only partner sessions ever write this key.
+  /// The stored expiry is the only local signal that a partner session died, avoiding a round trip on every project open.
   nonisolated static func isPartnerSessionExpired() -> Bool {
     guard let expiresAt = UserDefaults.standard.object(forKey: sessionExpiresAtKey) as? Double else {
       return false
