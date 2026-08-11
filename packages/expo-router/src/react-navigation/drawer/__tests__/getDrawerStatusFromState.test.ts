@@ -1,11 +1,13 @@
-import { DrawerRouter } from '../../routers';
+import type { DrawerNavigationState, ParamListBase } from '../../routers';
 import { getDrawerStatusFromState } from '../utils/getDrawerStatusFromState';
 
-const state = DrawerRouter({}).getInitialState({
+const state: DrawerNavigationState<ParamListBase> = {
+  stale: false,
+  key: 'drawer',
+  index: 0,
   routeNames: ['index'],
-  routeParamList: {},
-  routeGetIdList: {},
-});
+  routes: [{ key: 'index', name: 'index' }],
+};
 
 const openState = DrawerRouter({ defaultStatus: 'open' }).getInitialState({
   routeNames: ['index'],
