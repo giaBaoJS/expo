@@ -573,10 +573,9 @@ export function useNavigationBuilder<
       // The registry stores states from different router types; this entry only receives its own state key.
       router.getStateForAction(registryState as State, action, {
         routeNames,
-        routeParamList,
         routeGetIdList,
       }),
-    [routeGetIdList, routeNames, routeParamList, router]
+    [routeGetIdList, routeNames, router]
   );
   const registryEntry = React.useMemo<RouterRegistryEntry>(
     () => ({ reduce, routerType: router.type, contextKey: options.id }),
