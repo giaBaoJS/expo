@@ -5,6 +5,7 @@ description: Track per-screen render and interactive timings by enabling the Rea
 ---
 
 import { Prerequisites, Requirement } from '~/ui/components/Prerequisites';
+import { Terminal } from '~/ui/components/Snippet';
 import { Step } from '~/ui/components/Step';
 import { Tabs, Tab } from '~/ui/components/Tabs';
 
@@ -196,6 +197,22 @@ Emitted at most once per screen instance within a session.
 | `urlHidden`   | `boolean` | Present as `true` when a route parameter was filtered.   |
 | `routeParams` | `object`  | Focused route params.                                    |
 | `...`         | `any`     | Any custom params passed via `markInteractive({ ... })`. |
+
+## View the metrics
+
+Per-screen metrics appear in the **Navigation** tab of the [EAS Observe dashboard](/eas/observe/dashboard/). From the terminal, query them by screen with `eas observe:routes`:
+
+<Terminal
+  cmd={[
+    '# All navigation metrics, grouped by route',
+    '$ eas observe:routes --days 7',
+    '',
+    '# Time to interactive for two routes',
+    '$ eas observe:routes --metric nav_tti --route-name /home --route-name /checkout',
+  ]}
+/>
+
+See [Querying with EAS CLI](/eas/observe/eas-cli/) for the full flag list.
 
 ## Notes and troubleshooting
 
