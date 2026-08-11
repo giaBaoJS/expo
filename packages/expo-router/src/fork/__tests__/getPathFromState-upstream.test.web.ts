@@ -39,6 +39,29 @@ test('converts state to path string', () => {
   expect(getPathFromState<object>(getStateFromPath<object>(path) as State)).toBe(path);
 });
 
+test("doesn't add undefined to path for optional params", () => {
+  const path = '/foo/bar';
+  const config = {
+    screens: {
+      Foo: '/foo/bar/:id?',
+    },
+  };
+  const state = {
+    routes: [
+      {
+        name: 'Foo',
+        params: { id: undefined },
+        path,
+      },
+    ],
+  };
+
+  expect(getPathFromState<object>(state, config)).toBe(path);
+  expect(getPathFromState<object>(getStateFromPath<object>(path, config) as State, config)).toBe(
+    path
+  );
+});
+
 test('converts state to path string with config', () => {
   const path = '/few/bar/sweet/apple/baz/jane?id=x10&valid=true';
   const config = {

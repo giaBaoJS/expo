@@ -1,9 +1,7 @@
+'use client';
 import type { JSX } from 'react';
 import { useRef, forwardRef, useEffect } from 'react';
 
-/**
- * Copied from @react-navigation/core
- */
 type Render = (children: React.ReactNode) => JSX.Element;
 
 type Props = {

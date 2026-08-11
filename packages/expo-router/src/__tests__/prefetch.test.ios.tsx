@@ -827,7 +827,6 @@ it('can still use <Screen /> while prefetching in tabs', () => {
     'Should only change after focus',
     'index',
     'Should only change after focus',
-    'index',
   ]);
 });
 

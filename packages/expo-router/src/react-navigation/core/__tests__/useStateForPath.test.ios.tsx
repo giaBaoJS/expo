@@ -1,10 +1,10 @@
 import { act, render, screen } from '@testing-library/react-native';
 
+import { getPathFromState } from '../../../fork/getPathFromState';
 import type { ParamListBase } from '../../routers';
 import { BaseNavigationContainer } from '../BaseNavigationContainer';
 import { Screen } from '../Screen';
 import { createNavigationContainerRef } from '../createNavigationContainerRef';
-import { getPathFromState } from '../getPathFromState';
 import { useNavigationBuilder } from '../useNavigationBuilder';
 import { useRoute } from '../useRoute';
 import { useStateForPath } from '../useStateForPath';
