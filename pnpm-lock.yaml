@@ -3026,6 +3026,9 @@ importers:
         specifier: ^7.28.0
         version: 7.29.7
     devDependencies:
+      '@types/node':
+        specifier: ^22.14.0
+        version: 22.20.1
       expo-module-scripts:
         specifier: workspace:*
         version: link:../../expo-module-scripts
@@ -17891,7 +17894,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
