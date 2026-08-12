@@ -29,13 +29,9 @@ _This version does not introduce any user-facing changes._
 
 ### 🐛 Bug fixes
 
-- Add missing `expo` peer dependency. ([#46950](https://github.com/expo/expo/pull/46950) by [@zoontek](https://github.com/zoontek))
-
 ## 56.0.13 - 2026-06-10
 
 ### 🐛 Bug fixes
-
-- Preserve Error call stacks when capturing component stacks. ([#46584](https://github.com/expo/expo/pull/46584) by [@krystofwoldrich](https://github.com/krystofwoldrich))
 
 ## 56.0.12 — 2026-05-20
 
