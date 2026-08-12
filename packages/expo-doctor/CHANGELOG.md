@@ -5,13 +5,13 @@
 ### 🛠 Breaking changes
 
 - Raise minimum Node.js version to `^22.13.0` ([#47202](https://github.com/expo/expo/pull/47202) by [@kitten](https://github.com/kitten))
-- Use an explicit mode for `.env` files and Expo config.
+- Use an explicit mode for `.env` files and Expo config. ([#48845](https://github.com/expo/expo/pull/48845) by [@ramonclaudio](https://github.com/ramonclaudio))
 
 ### 🎉 New features
 
 ### 🐛 Bug fixes
 
-- Keep loaded `.env` values out of `expo install --check`.
+- Keep loaded `.env` values out of `expo install --check`. ([#48845](https://github.com/expo/expo/pull/48845) by [@ramonclaudio](https://github.com/ramonclaudio))
 
 ### 💡 Others
 
