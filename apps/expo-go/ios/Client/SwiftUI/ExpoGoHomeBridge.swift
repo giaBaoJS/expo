@@ -42,6 +42,28 @@ import UIKit
       return
     }
 
+    if let verificationURI = PendingDeviceLogin.shared.current(forProjectURL: appUrl), !isAuthenticated() {
+      UserDefaults.standard.set(true, forKey: "ExpoGoOnboardingFinished")
+
+      Task { @MainActor in
+        guard let homeViewModel = self.homeViewModel else {
+          // Home is not up yet, so leave the pending sign in for the next attempt.
+          print("[DeviceLogin] Home is not ready, so the sign in sheet could not be presented yet.")
+          completion(false, nil)
+          return
+        }
+
+        let signedIn = await homeViewModel.presentDeviceLogin(verificationURI: verificationURI)
+        guard signedIn else {
+          completion(false, nil)
+          return
+        }
+        PendingDeviceLogin.shared.clear()
+        self.openApp(url: url, snackParams: snackParams, completion: completion)
+      }
+      return
+    }
+
     // Determine status text based on what we're opening
     let isLesson = (snackParams?["isLesson"] as? Bool) == true
     let isPlayground = (snackParams?["isPlayground"] as? Bool) == true
@@ -210,8 +232,7 @@ import UIKit
   static let expiredSessionMessage =
     "Your Expo Go session has expired. Reload your project's preview and scan the new QR code to continue."
 
-  /// Non-nil when a stored partner session has expired. Partner-provisioned users have no password,
-  /// so the generic "sign in to Expo Go" advice does not apply to them.
+  /// Non-nil when a stored partner session has expired. Partner-provisioned users have no password to fall back on.
   @objc public func expiredPartnerSessionMessage() -> String? {
     return AuthenticationService.isPartnerSessionExpired() ? Self.expiredSessionMessage : nil
   }
