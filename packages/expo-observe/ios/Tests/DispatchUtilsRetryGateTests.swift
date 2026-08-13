@@ -40,7 +40,7 @@ struct DispatchUtilsRetryGateTests {
       dispatchAfterDate: now.addingTimeInterval(60),
       consecutiveRetryableFailures: 4
     )
-    let partial = OTPartialSuccess(rejectedDataPoints: 2, rejectedLogRecords: nil, errorMessage: nil)
+    let partial = OTPartialSuccess(rejectedDataPoints: 2, rejectedLogRecords: nil, rejectedSpans: nil, errorMessage: nil)
     let next = DispatchUtils.nextRetryGateState(
       result: .partialSuccess(partial),
       currentState: state,
