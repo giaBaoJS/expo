@@ -283,30 +283,34 @@ export const stackRouterOverride: NonNullable<NativeStackNavigatorProps['UNSTABL
               preloadedRoutes.filter((route) => routes[routes.length - 1]!.key !== route.key)
             ),
           };
+          const affectedRouteKey = routes[routes.length - 1]!.key;
           if (actionSingularOptions) {
-            return filterSingular(result, getId);
+            const filteredState = filterSingular(result, getId);
+            return { state: filteredState, affectedRouteKey };
           }
 
           const zoomTransitionId = getZoomTransitionIdFromAction(action);
           if (zoomTransitionId) {
             const lastRoute = result.routes[result.index]!;
-            const key = lastRoute.key;
             const modifiedLastRoute: typeof lastRoute = {
               ...lastRoute,
               params: {
                 ...lastRoute.params,
-                [INTERNAL_EXPO_ROUTER_ZOOM_TRANSITION_SCREEN_ID_PARAM_NAME]: key,
+                [INTERNAL_EXPO_ROUTER_ZOOM_TRANSITION_SCREEN_ID_PARAM_NAME]: affectedRouteKey,
               },
             };
             return {
-              ...result,
-              routes: result.routes.map((route, index) =>
-                index === result.index ? modifiedLastRoute : route
-              ),
+              state: {
+                ...result,
+                routes: result.routes.map((route, index) =>
+                  index === result.index ? modifiedLastRoute : route
+                ),
+              },
+              affectedRouteKey,
             };
           }
 
-          return result;
+          return { state: result, affectedRouteKey };
           // return {
           //   ...state,
           //   index: routes.length - 1,
@@ -343,22 +347,25 @@ export const stackRouterOverride: NonNullable<NativeStackNavigatorProps['UNSTABL
 
           if (route) {
             return {
-              ...state,
-              type: 'stack',
-              routes: state.routes.map((r) => {
-                if (r.key !== route?.key) {
-                  return r;
-                }
-                return {
-                  ...r,
-                  params: preloadZoomTransitionId
-                    ? {
-                        ...action.payload.params,
-                        [INTERNAL_EXPO_ROUTER_ZOOM_TRANSITION_SCREEN_ID_PARAM_NAME]: r.key,
-                      }
-                    : action.payload.params,
-                };
-              }),
+              state: {
+                ...state,
+                type: 'stack',
+                routes: state.routes.map((r) => {
+                  if (r.key !== route?.key) {
+                    return r;
+                  }
+                  return {
+                    ...r,
+                    params: preloadZoomTransitionId
+                      ? {
+                          ...action.payload.params,
+                          [INTERNAL_EXPO_ROUTER_ZOOM_TRANSITION_SCREEN_ID_PARAM_NAME]: r.key,
+                        }
+                      : action.payload.params,
+                  };
+                }),
+              },
+              affectedRouteKey: route.key,
             };
           } else {
             // START FORK
@@ -375,20 +382,23 @@ export const stackRouterOverride: NonNullable<NativeStackNavigatorProps['UNSTABL
             };
             // END FORK
             return {
-              ...state,
-              type: 'stack',
-              // START FORK
-              // Adding the current preloaded route to the beginning of the preloadedRoutes array
-              // This ensures that the preloaded route will be the next one after the visible route
-              // and when navigation will happen, there will be no reshuffling
-              // This is a workaround for the link preview navigation issue, when screen would freeze after navigation from native side
-              // and reshuffling from react-navigation
-              routes: activeRoutes.concat(
-                currentPreloadedRoute,
-                preloadedRoutes.filter(
-                  (r) => r.name !== action.payload.name || id !== getId?.({ params: r.params })
-                )
-              ),
+              state: {
+                ...state,
+                type: 'stack',
+                // START FORK
+                // Adding the current preloaded route to the beginning of the preloadedRoutes array
+                // This ensures that the preloaded route will be the next one after the visible route
+                // and when navigation will happen, there will be no reshuffling
+                // This is a workaround for the link preview navigation issue, when screen would freeze after navigation from native side
+                // and reshuffling from react-navigation
+                routes: activeRoutes.concat(
+                  currentPreloadedRoute,
+                  preloadedRoutes.filter(
+                    (r) => r.name !== action.payload.name || id !== getId?.({ params: r.params })
+                  )
+                ),
+              },
+              affectedRouteKey: preloadedRouteKey,
               // END FORK
             };
           }

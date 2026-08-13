@@ -15,6 +15,14 @@ jest.mock('nanoid/non-secure', () => ({ nanoid: () => 'test' }));
 
 type DrawerHistory = NonNullable<DrawerNavigationState<ParamListBase>['history']>;
 
+function getCompleteState(
+  state: NonNullable<ReturnType<ReturnType<typeof DrawerRouter>['getStateForAction']>>['state']
+): DrawerNavigationState<ParamListBase> {
+  expect(state.stale).toBe(false);
+  // Drawer actions always return the complete state passed to the next reduction.
+  return state as DrawerNavigationState<ParamListBase>;
+}
+
 const stateWithoutHistory = (): DrawerNavigationState<ParamListBase> => ({
   stale: false,
   type: 'drawer',
@@ -52,7 +60,7 @@ test.each<{ action: DrawerActionType; expectedHistory: DrawerHistory }>([
   const router = DrawerRouter({});
 
   expect(
-    router.getStateForAction(stateWithoutHistory(), action, optionsWithoutHistory)?.history
+    router.getStateForAction(stateWithoutHistory(), action, optionsWithoutHistory)?.state.history
   ).toEqual(expectedHistory);
 });
 
@@ -83,7 +91,7 @@ test.each<{ action: DrawerActionType; expectedHistory: DrawerHistory }>([
     const router = DrawerRouter({ defaultStatus: 'open' });
 
     expect(
-      router.getStateForAction(stateWithoutHistory(), action, optionsWithoutHistory)?.history
+      router.getStateForAction(stateWithoutHistory(), action, optionsWithoutHistory)?.state.history
     ).toEqual(expectedHistory);
   }
 );
@@ -118,7 +126,7 @@ test.each<{ action: DrawerActionType; expectedHistory: DrawerHistory }>([
     ],
   };
 
-  expect(router.getStateForAction(state, action, options)?.history).toEqual(expectedHistory);
+  expect(router.getStateForAction(state, action, options)?.state.history).toEqual(expectedHistory);
 });
 
 test('preserves reconstructed history after closing the drawer', () => {
@@ -139,19 +147,19 @@ test('preserves reconstructed history after closing the drawer', () => {
     ],
   };
 
-  const openState = router.getStateForAction(
-    state,
-    DrawerActions.openDrawer(),
-    options
-  ) as DrawerNavigationState<ParamListBase>;
+  const openState = router.getStateForAction(state, DrawerActions.openDrawer(), options)!.state;
   const closedState = router.getStateForAction(
-    openState,
+    getCompleteState(openState),
     CommonActions.goBack(),
     options
-  ) as DrawerNavigationState<ParamListBase>;
-  const result = router.getStateForAction(closedState, CommonActions.goBack(), options);
+  )!.state;
+  const result = router.getStateForAction(
+    getCompleteState(closedState),
+    CommonActions.goBack(),
+    options
+  );
 
-  expect(result?.routes[result.index ?? -1]?.name).toBe('bar');
+  expect(result?.state.routes[result.state.index ?? -1]?.name).toBe('bar');
 });
 
 test('preserves drawer status when route names change', () => {
@@ -165,15 +173,15 @@ test('preserves drawer status when route names change', () => {
     initialState,
     DrawerActions.openDrawer(),
     options
-  ) as DrawerNavigationState<ParamListBase>;
+  )!.state;
 
   const state = router.getStateForAction(
-    openState,
+    getCompleteState(openState),
     { type: 'ROUTE_NAMES_CHANGED', payload: { routeNames: ['baz', 'bar'] } },
     { ...options, routeNames: ['baz', 'bar'] }
   );
 
-  expect(state!.history).toContainEqual({ type: 'drawer', status: 'open' });
+  expect(state!.state.history).toContainEqual({ type: 'drawer', status: 'open' });
 });
 
 test('restores route history without dropping drawer status when the active route is removed', () => {
@@ -187,15 +195,15 @@ test('restores route history without dropping drawer status when the active rout
     initialState,
     DrawerActions.openDrawer(),
     options
-  ) as DrawerNavigationState<ParamListBase>;
+  )!.state;
 
   const state = router.getStateForAction(
-    openState,
+    getCompleteState(openState),
     { type: 'ROUTE_NAMES_CHANGED', payload: { routeNames: ['baz'] } },
     { ...options, routeNames: ['baz'] }
   );
 
-  expect(state!.history).toEqual([
+  expect(state!.state.history).toEqual([
     { type: 'route', key: 'baz-test' },
     { type: 'drawer', status: 'open' },
   ]);
@@ -215,15 +223,15 @@ test('PRELOAD rebuilds route history without dropping drawer status', () => {
     focusedState,
     DrawerActions.openDrawer(),
     options
-  ) as DrawerNavigationState<ParamListBase>;
+  )!.state;
 
   const state = router.getStateForAction(
-    openState,
+    getCompleteState(openState),
     { type: 'PRELOAD', payload: { name: 'baz' } },
     options
   );
 
-  expect(state!.history).toEqual([
+  expect(state!.state.history).toEqual([
     { type: 'route', key: 'baz-test' },
     { type: 'route', key: 'qux-key' },
     { type: 'drawer', status: 'open' },
@@ -404,7 +412,7 @@ test('handles navigate action', () => {
       },
       CommonActions.navigate('baz', { answer: 42 }),
       options
-    )
+    )?.state
   ).toEqual({
     stale: false,
     type: 'drawer',
@@ -426,27 +434,27 @@ test('handles navigate action with open drawer', () => {
     routeGetIdList: {},
   };
 
-  expect(
-    router.getStateForAction(
-      {
-        stale: false,
-        type: 'drawer',
-        key: 'root',
-        index: 1,
-        routeNames: ['baz', 'bar'],
-        routes: [
-          { key: 'baz', name: 'baz' },
-          { key: 'bar', name: 'bar' },
-        ],
-        history: [
-          { type: 'route', key: 'bar' },
-          { type: 'drawer', status: 'open' },
-        ],
-      },
-      CommonActions.navigate('baz', { answer: 42 }),
-      options
-    )
-  ).toEqual({
+  const result = router.getStateForAction(
+    {
+      stale: false,
+      type: 'drawer',
+      key: 'root',
+      index: 1,
+      routeNames: ['baz', 'bar'],
+      routes: [
+        { key: 'baz', name: 'baz' },
+        { key: 'bar', name: 'bar' },
+      ],
+      history: [
+        { type: 'route', key: 'bar' },
+        { type: 'drawer', status: 'open' },
+      ],
+    },
+    CommonActions.navigate('baz', { answer: 42 }),
+    options
+  );
+
+  expect(result?.state).toEqual({
     stale: false,
     type: 'drawer',
     key: 'root',
@@ -458,6 +466,7 @@ test('handles navigate action with open drawer', () => {
     ],
     history: [{ type: 'route', key: 'baz' }],
   });
+  expect(result?.affectedRouteKey).toBe('baz');
 });
 
 test('closes open drawer on replace with backBehavior: fullHistory', () => {
@@ -486,7 +495,7 @@ test('closes open drawer on replace with backBehavior: fullHistory', () => {
       },
       DrawerActions.replace('baz'),
       options
-    )
+    )?.state
   ).toEqual({
     stale: false,
     type: 'drawer',
@@ -508,24 +517,24 @@ test('handles open drawer action', () => {
     routeGetIdList: {},
   };
 
-  expect(
-    router.getStateForAction(
-      {
-        stale: false,
-        type: 'drawer',
-        key: 'root',
-        index: 1,
-        routeNames: ['baz', 'bar'],
-        routes: [
-          { key: 'baz', name: 'baz' },
-          { key: 'bar', name: 'bar' },
-        ],
-        history: [{ type: 'route', key: 'bar' }],
-      },
-      DrawerActions.openDrawer(),
-      options
-    )
-  ).toEqual({
+  const result = router.getStateForAction(
+    {
+      stale: false,
+      type: 'drawer',
+      key: 'root',
+      index: 1,
+      routeNames: ['baz', 'bar'],
+      routes: [
+        { key: 'baz', name: 'baz' },
+        { key: 'bar', name: 'bar' },
+      ],
+      history: [{ type: 'route', key: 'bar' }],
+    },
+    DrawerActions.openDrawer(),
+    options
+  );
+
+  expect(result?.state).toEqual({
     stale: false,
     type: 'drawer',
     key: 'root',
@@ -540,6 +549,7 @@ test('handles open drawer action', () => {
       { type: 'drawer', status: 'open' },
     ],
   });
+  expect(result?.affectedRouteKey).toBe('bar');
 
   const state: DrawerNavigationState<ParamListBase> = {
     stale: false as const,
@@ -557,7 +567,7 @@ test('handles open drawer action', () => {
     ],
   };
 
-  expect(router.getStateForAction(state, DrawerActions.openDrawer(), options)).toBe(state);
+  expect(router.getStateForAction(state, DrawerActions.openDrawer(), options)?.state).toBe(state);
 });
 
 test('handles close drawer action', () => {
@@ -567,27 +577,27 @@ test('handles close drawer action', () => {
     routeGetIdList: {},
   };
 
-  expect(
-    router.getStateForAction(
-      {
-        stale: false,
-        type: 'drawer',
-        key: 'root',
-        index: 1,
-        routeNames: ['baz', 'bar'],
-        routes: [
-          { key: 'baz', name: 'baz' },
-          { key: 'bar', name: 'bar' },
-        ],
-        history: [
-          { type: 'route', key: 'bar' },
-          { type: 'drawer', status: 'open' },
-        ],
-      },
-      DrawerActions.closeDrawer(),
-      options
-    )
-  ).toEqual({
+  const result = router.getStateForAction(
+    {
+      stale: false,
+      type: 'drawer',
+      key: 'root',
+      index: 1,
+      routeNames: ['baz', 'bar'],
+      routes: [
+        { key: 'baz', name: 'baz' },
+        { key: 'bar', name: 'bar' },
+      ],
+      history: [
+        { type: 'route', key: 'bar' },
+        { type: 'drawer', status: 'open' },
+      ],
+    },
+    DrawerActions.closeDrawer(),
+    options
+  );
+
+  expect(result?.state).toEqual({
     stale: false,
     type: 'drawer',
     key: 'root',
@@ -599,6 +609,7 @@ test('handles close drawer action', () => {
     ],
     history: [{ type: 'route', key: 'bar' }],
   });
+  expect(result?.affectedRouteKey).toBe('bar');
 
   const state: DrawerNavigationState<ParamListBase> = {
     stale: false as const,
@@ -616,7 +627,7 @@ test('handles close drawer action', () => {
     ],
   };
 
-  expect(router.getStateForAction(state, DrawerActions.closeDrawer(), options)).toBe(state);
+  expect(router.getStateForAction(state, DrawerActions.closeDrawer(), options)?.state).toBe(state);
 });
 
 test('handles toggle drawer action', () => {
@@ -645,7 +656,7 @@ test('handles toggle drawer action', () => {
       },
       DrawerActions.toggleDrawer(),
       options
-    )
+    )?.state
   ).toEqual({
     stale: false,
     type: 'drawer',
@@ -675,7 +686,7 @@ test('handles toggle drawer action', () => {
       },
       DrawerActions.toggleDrawer(),
       options
-    )
+    )?.state
   ).toEqual({
     stale: false,
     type: 'drawer',

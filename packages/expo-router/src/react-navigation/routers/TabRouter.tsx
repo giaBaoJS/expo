@@ -367,7 +367,7 @@ export function TabRouter({
           const routeNames = action.payload.routeNames;
 
           if (isArrayEqual(state.routeNames, routeNames)) {
-            return state;
+            return { state, affectedRouteKey: state.routes[state.index]?.key };
           }
 
           const routes = addFallbackRouteIfEmpty(
@@ -378,11 +378,14 @@ export function TabRouter({
 
           if (routes.length === 0) {
             return {
-              ...state,
-              routeNames,
-              routes,
-              index: -1,
-              history: [],
+              state: {
+                ...state,
+                routeNames,
+                routes,
+                index: -1,
+                history: [],
+              },
+              affectedRouteKey: undefined,
             };
           }
 
@@ -440,11 +443,14 @@ export function TabRouter({
           }
 
           return {
-            ...state,
-            history,
-            routeNames,
-            routes,
-            index,
+            state: {
+              ...state,
+              history,
+              routeNames,
+              routes,
+              index,
+            },
+            affectedRouteKey: routes[index]!.key,
           };
         }
 
@@ -512,16 +518,19 @@ export function TabRouter({
             initialRouteName
           );
 
-          return action.type === 'REPLACE'
-            ? removeReplacedRouteFromHistory(state, updatedState)
-            : updatedState;
+          const result =
+            action.type === 'REPLACE'
+              ? removeReplacedRouteFromHistory(state, updatedState)
+              : updatedState;
+          return { state: result, affectedRouteKey: result.routes[result.index]?.key };
         }
 
         case 'SET_PARAMS':
         case 'REPLACE_PARAMS': {
-          const nextState = BaseRouter.getStateForAction(state, action);
+          const actionResult = BaseRouter.getStateForAction(state, action);
 
-          if (nextState !== null) {
+          if (actionResult !== null) {
+            const nextState = actionResult.state;
             const index = nextState.index;
 
             if (index != null) {
@@ -541,13 +550,16 @@ export function TabRouter({
               }
 
               return {
-                ...nextState,
-                history: updatedHistory,
+                ...actionResult,
+                state: {
+                  ...nextState,
+                  history: updatedHistory,
+                },
               };
             }
           }
 
-          return nextState;
+          return actionResult;
         }
 
         case 'GO_BACK': {
@@ -580,7 +592,13 @@ export function TabRouter({
             }));
 
             if (routes !== state.routes) {
-              return changeIndex({ ...state, routes }, index, backBehavior, initialRouteName);
+              const result = changeIndex(
+                { ...state, routes },
+                index,
+                backBehavior,
+                initialRouteName
+              );
+              return { state: result, affectedRouteKey: result.routes[result.index]?.key };
             }
           }
 
@@ -610,10 +628,13 @@ export function TabRouter({
           }
 
           return {
-            ...state,
-            routes,
-            history: state.history.slice(0, -1),
-            index,
+            state: {
+              ...state,
+              routes,
+              history: state.history.slice(0, -1),
+              index,
+            },
+            affectedRouteKey: routes[index]!.key,
           };
         }
 
@@ -623,12 +644,14 @@ export function TabRouter({
           }
 
           const routeIndex = state.routes.findIndex((route) => route.name === action.payload.name);
+          let affectedRouteKey: string;
           let replacedKey: string | undefined;
           let routes: Route<string>[];
 
           if (routeIndex === -1) {
             const route = createRouteFromAction({ action });
             routes = [...state.routes, route];
+            affectedRouteKey = route.key;
           } else {
             const route = state.routes[routeIndex]!;
             const getId = routeGetIdList[route.name];
@@ -640,6 +663,7 @@ export function TabRouter({
 
             replacedKey = key === route.key ? undefined : route.key;
             routes = state.routes.map((route, index) => (index === routeIndex ? newRoute : route));
+            affectedRouteKey = newRoute.key;
           }
 
           let history = state.history;
@@ -681,9 +705,12 @@ export function TabRouter({
           }
 
           return {
-            ...state,
-            routes,
-            history,
+            state: {
+              ...state,
+              routes,
+              history,
+            },
+            affectedRouteKey,
           };
         }
 

@@ -37,9 +37,10 @@ test("lets parent handle the action if child didn't", () => {
 
       getStateForAction(state, action, options) {
         if (action.type === 'REVERSE') {
+          const routes = state.routes.slice().reverse();
           return {
-            ...state,
-            routes: state.routes.slice().reverse(),
+            state: { ...state, routes },
+            affectedRouteKey: routes[state.index]?.key,
           };
         }
 
@@ -170,9 +171,10 @@ test("lets children handle the action if parent didn't with navigationInChildEna
 
       getStateForAction(state, action, options) {
         if (action.type === 'REVERSE') {
+          const routes = state.routes.slice().reverse();
           return {
-            ...state,
-            routes: state.routes.slice().reverse(),
+            state: { ...state, routes },
+            affectedRouteKey: routes[state.index]?.key,
           };
         }
         return CurrentMockRouter.getStateForAction(state, action, options);
@@ -367,9 +369,10 @@ test('action goes to correct parent navigator if target is specified', () => {
 
       getStateForAction(state, action, options) {
         if (action.type === 'REVERSE') {
+          const routes = state.routes.slice().reverse();
           return {
-            ...state,
-            routes: state.routes.slice().reverse(),
+            state: { ...state, routes },
+            affectedRouteKey: routes[state.index]?.key,
           };
         }
 
@@ -489,9 +492,10 @@ test('action goes to correct child navigator if target is specified', () => {
 
       getStateForAction(state, action, options) {
         if (action.type === 'REVERSE') {
+          const routes = state.routes.slice().reverse();
           return {
-            ...state,
-            routes: state.routes.slice().reverse(),
+            state: { ...state, routes },
+            affectedRouteKey: routes[state.index]?.key,
           };
         }
 
@@ -611,9 +615,10 @@ test("action doesn't bubble if target is specified", () => {
 
       getStateForAction(state, action, options) {
         if (action.type === 'REVERSE') {
+          const routes = state.routes.slice().reverse();
           return {
-            ...state,
-            routes: state.routes.slice().reverse(),
+            state: { ...state, routes },
+            affectedRouteKey: routes[state.index]?.key,
           };
         }
 
