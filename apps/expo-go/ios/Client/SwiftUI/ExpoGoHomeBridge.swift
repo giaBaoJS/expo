@@ -277,6 +277,9 @@ import UIKit
     Task { @MainActor in
       let signedIn = await self.homeViewModel?.presentDeviceLogin(verificationURI: verificationURI) ?? false
       if signedIn {
+        if let host = verificationURI.host, let username = AuthenticationService.currentUsername {
+          AuthenticationService.recordDeviceLoginGrant(username: username, forVerificationHost: host)
+        }
         PendingDeviceLogin.shared.clear()
       }
     }

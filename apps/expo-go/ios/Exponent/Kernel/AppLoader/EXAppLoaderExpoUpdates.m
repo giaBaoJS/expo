@@ -257,9 +257,15 @@ static BOOL isEASUpdateHost(NSString * _Nullable host)
     NSString *message;
     if (verificationURI != nil) {
       // The QR asked for a sign in, so the account can be switched here rather than on a computer.
-      message = [NSString stringWithFormat:
-        @"This project belongs to \"%@\", and you're signed in to Expo Go as \"%@\". Sign in as \"%@\" to open it. Expo Go will show you a code to enter at %@, then tap Try Again.",
-        manifestUsername, expoGoUsername ?: @"someone else", manifestUsername, verificationURI.host];
+      if (expoGoUsername != nil && [expoGoUsername length] > 0) {
+        message = [NSString stringWithFormat:
+          @"This project belongs to \"%@\", and you're signed in to Expo Go as \"%@\". Sign in as \"%@\" to open it. Expo Go will show you a code to enter at %@, then tap Try Again.",
+          manifestUsername, expoGoUsername, manifestUsername, verificationURI.host];
+      } else {
+        message = [NSString stringWithFormat:
+          @"This project belongs to \"%@\", and you're not signed in to Expo Go. Sign in as \"%@\" to open it. Expo Go will show you a code to enter at %@, then tap Try Again.",
+          manifestUsername, manifestUsername, verificationURI.host];
+      }
       [[ExpoGoHomeBridge shared] offerDeviceLoginWithVerificationURI:verificationURI];
     } else if (expoGoUsername == nil || [expoGoUsername length] == 0) {
       message = [NSString stringWithFormat:
