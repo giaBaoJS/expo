@@ -23,8 +23,8 @@ object MetricsConstants {
 }
 
 @Database(
-  entities = [Metric::class, LogRecord::class, Session::class, CrashReportEntity::class],
-  version = 16,
+  entities = [Metric::class, LogRecord::class, Session::class, CrashReportEntity::class, Span::class],
+  version = 17,
   exportSchema = false
 )
 abstract class MetricsDatabase : RoomDatabase() {
@@ -35,6 +35,8 @@ abstract class MetricsDatabase : RoomDatabase() {
   abstract fun sessionDao(): SessionDao
 
   abstract fun crashReportDao(): CrashReportDao
+
+  abstract fun spanDao(): SpanDao
 
   companion object {
     @Volatile

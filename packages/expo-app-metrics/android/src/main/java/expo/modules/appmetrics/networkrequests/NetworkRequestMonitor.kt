@@ -42,6 +42,31 @@ class NetworkRequestMonitor internal constructor() {
   private val delegates = mutableListOf<WeakReference<NetworkRequestObserverDelegate>>()
 
   /**
+   * Persists each recorded completion into the metrics database. Held strongly — unlike
+   * delegates, persistence is part of the pipeline, not an observer of it. `null` until the
+   * module installs it (and in tests that don't exercise persistence).
+   */
+  private var persistence: NetworkRequestPersistence? = null
+
+  /**
+   * Installs the persistence hook and drains the ring buffer through it. The interceptor
+   * installs at `Application.onCreate`, but persistence can only start once the module created
+   * the main session — requests observed in between sit in the buffer, so draining it here
+   * keeps startup traffic. The swap and the snapshot happen under the same lock as `record`,
+   * so a concurrent completion is either in the drained snapshot or persisted by `record`,
+   * never both.
+   */
+  fun installPersistence(persistence: NetworkRequestPersistence) {
+    val buffered = synchronized(lock) {
+      this.persistence = persistence
+      recentRequests.toList()
+    }
+    for (request in buffered) {
+      persistence.onNetworkRequestCompleted(request)
+    }
+  }
+
+  /**
    * Most recently observed completed requests, oldest first. Bounded by `recentCapacity`.
    * Intended for debug surfaces and the TTI summary; not for the dispatch path.
    */
@@ -77,16 +102,17 @@ class NetworkRequestMonitor internal constructor() {
     }
   }
 
-  /** Records a completed request: appends to the ring buffer and fans out. */
+  /** Records a completed request: appends to the ring buffer, persists it, and fans out. */
   fun record(request: NetworkRequest) {
-    val snapshot = synchronized(lock) {
+    val (persistence, snapshot) = synchronized(lock) {
       recentRequests.addLast(request)
       while (recentRequests.size > recentCapacity) {
         recentRequests.removeFirst()
       }
       delegates.removeAll { it.get() == null }
-      delegates.mapNotNull { it.get() }
+      persistence to delegates.mapNotNull { it.get() }
     }
+    persistence?.onNetworkRequestCompleted(request)
     for (delegate in snapshot) {
       if (delegate.shouldObserveRequest(request.url, request.method)) {
         delegate.onNetworkRequestCompleted(request)

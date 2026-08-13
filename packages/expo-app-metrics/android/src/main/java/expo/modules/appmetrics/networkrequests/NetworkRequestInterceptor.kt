@@ -259,6 +259,7 @@ internal fun buildSnapshot(
     // Falls back to the class name because an exception is allowed to carry no message at all, and
     // a null description would read as "this request succeeded" to `isFailed`.
     errorDescription = failure?.let { it.localizedMessage ?: it.message ?: it.javaClass.simpleName },
+    errorType = failure?.javaClass?.name,
     redirects = redirects
   )
 }

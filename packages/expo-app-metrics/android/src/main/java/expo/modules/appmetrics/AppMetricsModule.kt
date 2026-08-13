@@ -13,7 +13,9 @@ import expo.modules.appmetrics.crashreporting.PreferencesLastProcessedExitStore
 import expo.modules.appmetrics.crashreporting.attributeAndStoreCrashReport
 import expo.modules.appmetrics.logevents.LogEventOptions
 import expo.modules.appmetrics.networkrequests.NetworkRequestFilter
+import expo.modules.appmetrics.networkrequests.NetworkRequestMonitor
 import expo.modules.appmetrics.networkrequests.NetworkRequestObserver
+import expo.modules.appmetrics.networkrequests.NetworkRequestPersistence
 import expo.modules.appmetrics.logevents.Severity
 import expo.modules.appmetrics.logevents.sanitizeLogEventAttributes
 import expo.modules.appmetrics.logevents.validateDisplayName
@@ -22,6 +24,7 @@ import expo.modules.appmetrics.logevents.validateEventName
 import expo.modules.appmetrics.logevents.withDisplayNameAttribute
 import expo.modules.appmetrics.memory.MemoryMetricsManager
 import expo.modules.appmetrics.storage.JsDebugSession
+import expo.modules.appmetrics.storage.MetricsDatabase
 import expo.modules.appmetrics.storage.JsLogRecord
 import expo.modules.appmetrics.storage.JsMetric
 import expo.modules.appmetrics.storage.LogRecord
@@ -151,6 +154,20 @@ class AppMetricsModule : Module(), UpdatesStateChangeListener {
         // (`getMainSession`, …) as soon as possible. Idempotent:
         // a racing write triggers (and joins) the same single start job.
         scope.launch { mainSession.awaitSessionPersisted() }
+
+        // From here on every completed request is written to the `spans` table, attributed to
+        // the main session. Awaiting the session row first keeps the FK satisfied for every
+        // span insert; installation also drains requests buffered since process start.
+        scope.launch {
+          mainSession.awaitSessionPersisted()
+          NetworkRequestMonitor.shared.installPersistence(
+            NetworkRequestPersistence(
+              database = MetricsDatabase.getDatabase(context),
+              scope = scope,
+              sessionId = { mainSession.sessionId }
+            )
+          )
+        }
 
         // Sweep sessions orphaned by a previous process. The cutoff equals this
         // session's start and the comparison is strict (`<`), so this session
