@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid/non-secure';
 import { orderRoutesByRouteNames } from '../../utils/orderRoutesByRouteNames';
 import { isArrayEqual } from '../core/isArrayEqual';
 import { BaseRouter } from './BaseRouter';
+import { attachRouteState, type RouteState } from './attachRouteState';
 import { createRouteFromAction } from './createRouteFromAction';
 import type {
   CommonNavigationAction,
@@ -17,19 +18,19 @@ import type {
 export type TabActionType =
   | {
       type: 'JUMP_TO';
-      payload: { name: string; params?: object };
+      payload: { name: string; params?: object; state?: RouteState };
       source?: string;
       target?: string;
     }
   | {
       type: 'REPLACE';
-      payload: { name: string; params?: object };
+      payload: { name: string; params?: object; state?: RouteState };
       source?: string;
       target?: string;
     }
   | {
       type: 'PUSH';
-      payload: { name: string; params?: object };
+      payload: { name: string; params?: object; state?: RouteState };
       source?: string;
       target?: string;
     };
@@ -508,9 +509,11 @@ export function TabRouter({
                     ? action.payload.path
                     : route.path;
 
-                return params !== route.params || path !== route.path
-                  ? { ...route, key, path, params }
-                  : route;
+                const updatedRoute =
+                  params !== route.params || path !== route.path
+                    ? { ...route, key, path, params }
+                    : route;
+                return attachRouteState(updatedRoute, action);
               }),
             },
             index,
@@ -649,7 +652,7 @@ export function TabRouter({
           let routes: Route<string>[];
 
           if (routeIndex === -1) {
-            const route = createRouteFromAction({ action });
+            const route = attachRouteState(createRouteFromAction({ action }), action);
             routes = [...state.routes, route];
             affectedRouteKey = route.key;
           } else {
@@ -659,7 +662,10 @@ export function TabRouter({
             const nextId = getId?.({ params: action.payload.params });
             const key = currentId === nextId ? route.key : `${route.name}-${nanoid()}`;
             const params = action.payload.params;
-            const newRoute = params !== route.params ? { ...route, key, params } : route;
+            const newRoute = attachRouteState(
+              params !== route.params ? { ...route, key, params } : route,
+              action
+            );
 
             replacedKey = key === route.key ? undefined : route.key;
             routes = state.routes.map((route, index) => (index === routeIndex ? newRoute : route));

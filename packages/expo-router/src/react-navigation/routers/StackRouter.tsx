@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid/non-secure';
 
 import { isArrayEqual } from '../core/isArrayEqual';
 import { BaseRouter } from './BaseRouter';
+import { attachRouteState, type RouteState } from './attachRouteState';
 import { createRouteFromAction } from './createRouteFromAction';
 import type {
   CommonNavigationAction,
@@ -15,13 +16,13 @@ import type {
 export type StackActionType =
   | {
       type: 'REPLACE';
-      payload: { name: string; params?: object };
+      payload: { name: string; params?: object; state?: RouteState };
       source?: string;
       target?: string;
     }
   | {
       type: 'PUSH';
-      payload: { name: string; params?: object };
+      payload: { name: string; params?: object; state?: RouteState };
       source?: string;
       target?: string;
     }
@@ -42,6 +43,7 @@ export type StackActionType =
         name: string;
         params?: object;
         merge?: boolean;
+        state?: RouteState;
       };
       source?: string;
       target?: string;
@@ -342,6 +344,7 @@ export function StackRouter(options: StackRouterOptions) {
           if (!route) {
             route = createRouteFromAction({ action });
           }
+          route = attachRouteState(route, action);
 
           return {
             state: reconcileStackRoutes(
@@ -385,6 +388,10 @@ export function StackRouter(options: StackRouterOptions) {
               (route) =>
                 route.name === action.payload.name && id === getId?.({ params: route.params })
             );
+          }
+
+          if (route) {
+            route = attachRouteState(route, action);
           }
 
           let params;
@@ -443,12 +450,15 @@ export function StackRouter(options: StackRouterOptions) {
           } else {
             routes = [
               ...activeRoutes,
-              {
-                key: `${action.payload.name}-${nanoid()}`,
-                name: action.payload.name,
-                path: action.type === 'NAVIGATE' ? action.payload.path : undefined,
-                params,
-              },
+              attachRouteState(
+                {
+                  key: `${action.payload.name}-${nanoid()}`,
+                  name: action.payload.name,
+                  path: action.type === 'NAVIGATE' ? action.payload.path : undefined,
+                  params,
+                },
+                action
+              ),
             ];
           }
 
@@ -626,6 +636,7 @@ export function StackRouter(options: StackRouterOptions) {
             if (!route) {
               route = createRouteFromAction({ action });
             }
+            route = attachRouteState(route, action);
 
             const routes = activeRoutes.slice(0, currentIndex).concat(route);
 
@@ -639,7 +650,7 @@ export function StackRouter(options: StackRouterOptions) {
             };
           }
 
-          const route = activeRoutes[index]!;
+          const route = attachRouteState(activeRoutes[index]!, action);
 
           let params;
 
@@ -658,7 +669,7 @@ export function StackRouter(options: StackRouterOptions) {
           return {
             state: reconcileStackRoutes(state, [
               ...activeRoutes.slice(0, index),
-              params !== route.params ? { ...route, params } : activeRoutes[index]!,
+              params !== route.params ? { ...route, params } : route,
             ]),
             affectedRouteKey: route.key,
           };
@@ -702,16 +713,19 @@ export function StackRouter(options: StackRouterOptions) {
                   if (r.key !== route?.key) {
                     return r;
                   }
-                  return {
-                    ...r,
-                    params: action.payload.params,
-                  };
+                  return attachRouteState(
+                    {
+                      ...r,
+                      params: action.payload.params,
+                    },
+                    action
+                  );
                 }),
               },
               affectedRouteKey: route.key,
             };
           } else {
-            const preloadedRoute = createRouteFromAction({ action });
+            const preloadedRoute = attachRouteState(createRouteFromAction({ action }), action);
             return {
               state: {
                 ...reconcileStackRoutes(
